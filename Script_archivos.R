@@ -17,7 +17,7 @@ library(lubridate)
 library(spData)
 
 #script para generar el csv con toda la info junta que se baja de internet
-setwd("C:/Users/MJFerreyra/Documents/COVID-19")
+setwd("C:/Users/MJFerreyra/Documents/COVID-19/Deploy")
 #df_paises <- st_read("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson",stringsAsFactors =FALSE)
 #df_paises$geometry2 <- st_centroid(st_geometry(df_paises))
 
