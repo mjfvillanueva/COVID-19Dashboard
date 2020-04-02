@@ -4,26 +4,19 @@ library(DT)
 library(sf)
 library(plotly)
 library(lubridate)
-library(shiny)
-library(shinyjs)
 
-
-
-setwd("C:/Users/MJFerreyra/Documents/COVID-19/Deploy")
+#setwd("C:/Users/MJFerreyra/Documents/COVID-19/Deploy")
 df_full <-read.csv("./df_full.csv", stringsAsFactors = FALSE)
 
-#df_paises <- st_read("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson",stringsAsFactors =FALSE)
-#df_paises <- st_read("./countries.geojson",stringsAsFactors =FALSE)
+
 df_paises <- st_read("./custom.geo.json",stringsAsFactors =FALSE)
 
 #renombro saco columnas que no me sirven
-#names(df_paises)[1] <- "location"
-names(df_paises)[9]<- "location"
-#df_paises$ISO_A3 <- NULL
-#df_paises$ISO_A2 <- NULL
 
+names(df_paises)[9]<- "location"
 
 df_paises <-df_full%>%group_by(Country.Region,Date)%>%
+ # summarise(confirmed=sum(confirmed, na.rm=T), recovered=sum(recovered, na.rm=T), deaths=sum(deaths, na.rm=T))%>%
   summarise(confirmed=sum(confirmed, na.rm=T), 
             new_confirmed=sum(new_confirmed, na.rm=T),
             recovered=sum(recovered, na.rm=T), 
@@ -35,15 +28,29 @@ df_paises <-df_full%>%group_by(Country.Region,Date)%>%
   select(confirmed,recovered,deaths,active,new_confirmed,new_recovered,new_deaths,new_active,Country.Region,Date)%>%
   left_join(df_paises, by= c("Country.Region"="location"))
 
-df_paises$Country.Region <- as.factor(df_paises$Country.Region)
 
-#pal_graf <- c("#712b29"  ,"#7f401f", "#4a4945","#4c6627" )
-rm(df_full)
+df_full <-df_full%>%group_by(Province.State,Date, Lat, Long)%>%
+  summarise(confirmed=sum(confirmed, na.rm=T), 
+            new_confirmed=sum(new_confirmed, na.rm=T),
+            recovered=sum(recovered, na.rm=T), 
+            new_recovered=sum(new_recovered, na.rm=T),
+            deaths=sum(deaths, na.rm=T),
+            new_deaths=sum(new_deaths, na.rm=T),
+            active=sum(active, na.rm=T),
+            new_active=sum(new_active, na.rm=T))%>%
+  select(confirmed,recovered,deaths,active,new_confirmed,new_recovered,new_deaths,new_active,Province.State,Date, Lat, Long)
+
+
+df_paises$Country.Region <- as.factor(df_paises$Country.Region)
+df_full$Province.State <- as.factor(df_full$Province.State)
+
+pal_graf <- c("#712b29"  ,"#7f401f", "#4a4945","#4c6627" )
 
 ui <- shinyUI(fluidPage(
- #useShinydashboardPlus(),
+
+  #useShinydashboardPlus(),
   
-theme = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/sandstone/bootstrap.css",
+  theme = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/sandstone/bootstrap.css",
 
  fluidRow(style = "padding: 0px;",
           column(style="padding:0px;",
@@ -54,31 +61,44 @@ theme = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/sandstone/bootstrap
               offset = 0),
           column(style="padding:0px;",
             width = 6,align="right",
-            uiOutput("actualizacion"),  offset = 0)),
+            uiOutput("actualizacion"),  offset = 0)
+ 
+         
+          ),
  
     fluidRow(
-      column(class="alert alert-dismissible alert-danger", 
+      column(class="alert alert-dismissible alert-danger", #
             width = 3,align="center",
             uiOutput("conf_html"),offset = 0),     
-    
-      column(class="alert alert-dismissible alert-warning",  
+      
+      column(class="alert alert-dismissible alert-warning", #  
              width = 3,align="center",
             uiOutput("act_html"),
              offset = 0),   
       
-      column(class="alert alert-dismissible alert-secondary",   
+      column(class="alert alert-dismissible alert-secondary", #  
         width = 3,align="center",
         uiOutput("muer_html"), offset = 0),
       
-      column(class="alert alert-dismissible alert-success", 
-             width = 3,align="center",
+      column(class="alert alert-dismissible alert-success", #
+
+        width = 3,align="center",
         uiOutput("rec_html"), offset = 0)   
       
              ), 
     fluidRow(
+      
+     
       column(width=7,offset=0,style = "padding: 0px;", 
-           leafletOutput("mapapais", height = 490)
+          # leafletOutput("mapapais", height = 490)
+            tabsetPanel(
+              tabPanel("Paises",  leafletOutput("mapapais", height = 490)),
+              tabPanel("Principales Ciudades", leafletOutput("mapaciudades", 
+                                                             height = 490))
+            )  
+          
              ),
+             
       column(width=5,offset=0,style = "padding: 0px;",
              
         tabsetPanel(
@@ -90,7 +110,7 @@ theme = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/sandstone/bootstrap
                                 selected="TODO EL MUNDO")),
                 div(style = "display:inline-block; width: 40%;",
                     selectInput(label="Seleccione Analisis:",inputId="sGraficoPor",choices=c("Casos Acumulados","Casos Reportados","Tasa de Letalidad"), 
-                                selected="Casos Acumulados")),
+                                selected="Acumulado")),
               plotlyOutput("graf_1", height = "400", width = "100%")
             ),
           tabPanel("Datos",height =490,
@@ -98,16 +118,17 @@ theme = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/sandstone/bootstrap
                    dataTableOutput("tab_1")
                  )
         ))
+      #)  
     )
   )
   )
 
 
 server <- function(input, output,  session) {
- options(shiny.trace=T)
+ #options(shiny.trace=T)
   
    fecha_ult_dato <- reactive(
-     max(ymd(df_paises$Date))
+     max(ymd(df_full$Date))
    )
    
    df_ult_casos <- reactive({
@@ -117,10 +138,26 @@ server <- function(input, output,  session) {
      df_ult_casos 
    })
    
+   df_ult_casos_c <- reactive({
+     
+     df_ult_casos_ciudades <- df_full%>%filter(Date ==fecha_ult_dato())
+     
+     df_ult_casos_ciudades 
+   })
+
    
    df_serie <- reactive({
      
-   
+    # periodo <- input$sel_periodo
+     
+    # if(periodo=="Ultimos 10 dias")
+    #   fecha <-fecha_ult_dato()-10
+    # else if (periodo=="Ultimo mes")
+    #  fecha <-fecha_ult_dato()-30
+    #  else if (periodo=="Historico")
+      fecha <- ymd("1900-01-01")
+      
+    # df_serie <- df_paises%>%filter(ymd(Date) > fecha)%>%
     df_serie <- df_paises%>%group_by(Date=ymd(Date), Country.Region)%>%
        summarise(confirmed=sum(confirmed, na.rm=T), 
                  new_confirmed=sum(new_confirmed, na.rm=T),
@@ -130,10 +167,11 @@ server <- function(input, output,  session) {
                  new_deaths=sum(new_deaths, na.rm=T),
                  active=sum(active, na.rm=T),
                  new_active=sum(new_active, na.rm=T))
+      # summarise(confirmed=sum(confirmed, na.rm=T), recovered=sum(recovered, na.rm=T), deaths=sum(deaths, na.rm=T),active=sum(active, na.rm=T))
 
-    df_serie$tasa <- ifelse(df_serie$confirmed>0,round((df_serie$deaths/df_serie$confirmed)*100,2),0)
+     df_serie$tasa <- ifelse(df_serie$confirmed>0,round((df_serie$deaths/df_serie$confirmed)*100,2),0)
      
-    df_serie 
+     df_serie 
    })
   
    casos_conf <- reactive({sum(df_ult_casos()$confirmed, na.rm=T)})
@@ -141,12 +179,16 @@ server <- function(input, output,  session) {
    casos_rec <- reactive({sum(df_ult_casos()$recovered, na.rm=T)})
    casos_muer <- reactive({sum(df_ult_casos()$deaths, na.rm=T)})
    
-   conf_porc <- reactive( {paste(as.character(round(sum(df_ult_casos()$new_confirmed, na.rm=T)/(casos_conf()-sum(df_ult_casos()$new_confirmed, na.rm=T))*100,2))," %") })
-   act_porc <- reactive( {paste(as.character(round(sum(df_ult_casos()$new_active, na.rm=T)/(casos_act()-sum(df_ult_casos()$new_active, na.rm=T))*100,2))," %") })
-   muer_porc <- reactive( {paste(as.character(round(sum(df_ult_casos()$new_deaths, na.rm=T)/(casos_muer()-sum(df_ult_casos()$new_deaths, na.rm=T))*100,2))," %") })
-   rec_porc <- reactive( {paste(as.character(round(sum(df_ult_casos()$new_recovered, na.rm=T)/(casos_rec()-sum(df_ult_casos()$new_recovered, na.rm=T))*100,2))," %") })
+   conf_porc <- reactive( {paste(as.character(round(sum(df_ult_casos()$new_confirmed, na.rm=T)/(sum(df_ult_casos()$confirmed, na.rm=T)-sum(df_ult_casos()$new_confirmed, na.rm=T))*100,2))," %") })
+   
+   act_porc <- reactive( {paste(as.character(round(sum(df_ult_casos()$new_active, na.rm=T)/(sum(df_ult_casos()$active, na.rm=T)-sum(df_ult_casos()$new_active, na.rm=T))*100,2))," %") })
+   
+   muer_porc <- reactive( {paste(as.character(round(sum(df_ult_casos()$new_deaths, na.rm=T)/(sum(df_ult_casos()$deaths, na.rm=T)-sum(df_ult_casos()$new_deaths, na.rm=T))*100,2))," %") })
+   
+   rec_porc <- reactive( {paste(as.character(round(sum(df_ult_casos()$new_recovered, na.rm=T)/(sum(df_ult_casos()$recovered, na.rm=T)-sum(df_ult_casos()$new_recovered, na.rm=T))*100,2))," %") })
    
    output$conf_html <- renderUI({
+    # tags$div(HTML("<i class='fas fa-arrow-circle-down'></i> 58%")),
      tagList(
        h1(format(casos_conf(), big.mark=".",small.mark=".", decimal.mark = ',') ),
        h3("CONFIRMADOS"),
@@ -226,6 +268,7 @@ server <- function(input, output,  session) {
       bin1 <- c(1,100,500,3000,50000,150000,1500000)
       palc <- colorBin(palette ="YlOrRd", domain = df_ult_casos()$confirmed, bins = bin1)
     
+      
       bin2 <- c(0,1,500,1500,3000,10000)
       pald <- colorBin(palette ="Greys", domain = df_ult_casos()$deaths, bins = bin2)
       
@@ -236,6 +279,7 @@ server <- function(input, output,  session) {
       pala <- colorBin(palette ="Oranges", domain = df_ult_casos()$active, bins = bin4)
       
       leaflet()%>%
+        # addTiles()%>%
          setView(0,0,2)%>%
          addPolygons(data = df_ult_casos()$geometry,
                      weight = 0.5, 
@@ -244,7 +288,8 @@ server <- function(input, output,  session) {
                      fillOpacity = 0.6,
                      color=palc(df_ult_casos()$confirmed),
                      popup=labels,
-                     layerId =paste0("c",df_ult_casos()$Country.Region),
+                     #stroke = FALSE,
+                     layerId =df_ult_casos()$Country.Region,
                      highlightOptions = highlightOptions(color = "white", 
                                                          weight = 0.8, bringToFront = TRUE))%>%
         addLegend(
@@ -254,47 +299,45 @@ server <- function(input, output,  session) {
           opacity = 0.6,
           title = "Casos confirmados",
           position = "bottomleft")%>%
-          addPolygons(data = df_ult_casos()$geometry,
+         addPolygons(data = df_ult_casos()$geometry,
                       weight = 0.5, 
-                      smoothFactor = 0.5,
-                      opacity = 2.0,
-                      fillOpacity = 0.6,
-                      color=pald(df_ult_casos()$deaths),
-                      popup=labels,
-                      layerId =paste0("d",df_ult_casos()$Country.Region),
-                      highlightOptions = highlightOptions(color = "white", 
-                                                          weight = 0.8, bringToFront = TRUE),
-                      group="Muertes")%>%
-          addPolygons(data = df_ult_casos()$geometry,
-                      weight = 0.5, 
-                      smoothFactor = 0.5,
-                      opacity = 2.0,
-                      fillOpacity = 0.6,
-                      color=palr(df_ult_casos()$recovered),
-                      layerId =paste0("r",df_ult_casos()$Country.Region),
-                      popup=labels,
-                      highlightOptions = highlightOptions(color = "white", 
-                                                          weight = 0.8, bringToFront = TRUE),
-                      group="Recuperados")%>%
-          addPolygons(data = df_ult_casos()$geometry,
-                      weight = 0.5, 
-                      smoothFactor = 0.5,
-                      opacity = 2.0,
-                      fillOpacity = 0.6,
-                      color=pala(df_ult_casos()$active),
-                      popup=labels,
-                      layerId =paste0("a",df_ult_casos()$Country.Region),
-                      highlightOptions = highlightOptions(color = "white", 
-                                                          weight = 0.8, bringToFront = TRUE),
-                      group="Activos")%>%
-          addLayersControl(
+                     smoothFactor = 0.5,
+                     opacity = 2.0,
+                     fillOpacity = 0.6,
+                     color=pald(df_ult_casos()$deaths),
+                     popup=labels,
+                     #layerId =df_ult_casos()$Country.Region,
+                     highlightOptions = highlightOptions(color = "white", 
+                                                         weight = 0.8, bringToFront = TRUE),
+                     group="Muertes")%>%
+       addPolygons(data = df_ult_casos()$geometry,
+                     weight = 0.5, 
+                     smoothFactor = 0.5,
+                     opacity = 2.0,
+                     fillOpacity = 0.6,
+                     color=palr(df_ult_casos()$recovered),
+                     popup=labels,
+                     highlightOptions = highlightOptions(color = "white", 
+                                                         weight = 0.8, bringToFront = TRUE),
+                     group="Recuperados")%>%
+        addPolygons(data = df_ult_casos()$geometry,
+                    weight = 0.5, 
+                    smoothFactor = 0.5,
+                    opacity = 2.0,
+                    fillOpacity = 0.6,
+                    color=pala(df_ult_casos()$active),
+                    popup=labels,
+                    #stroke = FALSE,
+                    highlightOptions = highlightOptions(color = "white", 
+                                                        weight = 0.8, bringToFront = TRUE),
+                    group="Activos")%>%
+         addLayersControl(
             baseGroups = c("Confirmados","Activos","Muertes","Recuperados"),
             options = layersControlOptions(collapsed = FALSE))
-      
-         
+       
     })
-    observeEvent(input$mapapais_groups,{
-      
+      observeEvent(input$mapapais_groups,{
+
       
       bin1 <- c(1,100,500,3000,50000,150000,1500000)
       palc <- colorBin(palette ="YlOrRd", domain = df_ult_casos()$confirmed, bins = bin1)
@@ -360,7 +403,6 @@ server <- function(input, output,  session) {
       
     })
     
-    
    output$tab_1 <- renderDataTable({
      
       df <- df_ult_casos()%>%select(Pais=Country.Region,
@@ -392,7 +434,8 @@ server <- function(input, output,  session) {
                  new_deaths=sum(new_deaths, na.rm=T),
                  active=sum(active, na.rm=T),
                  new_active=sum(new_active, na.rm=T))
-
+     # summarise(confirmed=sum(confirmed, na.rm=T), recovered=sum(recovered, na.rm=T), deaths=sum(deaths, na.rm=T))
+     
      df_serie_todo$tasa <- ifelse(df_serie_todo$confirmed>0,round((df_serie_todo$deaths/df_serie_todo$confirmed)*100,2),0)
      
      df_serie_todo 
@@ -408,11 +451,6 @@ server <- function(input, output,  session) {
   observeEvent( input$sPais, {
     
     ver_todo$data <- input$sPais
-    #mapapais_shape_click
-   # cat("aca")
-    #mapapais_shape_click":{"id":"Brazil"
-   # click("'mapapais_shape_click':{'id':'Brazil'}")
-  
     
   })
   
@@ -428,12 +466,18 @@ server <- function(input, output,  session) {
     }
     else
     {
-      ver_todo$data <-substring(click$id,2)
+      ver_todo$data <-click$id
     }      
     
     updateSelectInput (session, "sPais",selected = ver_todo$data)
     
+    #output$text <- renderPrint( 
+    #  print(click))
+    
   })
+  
+  
+  
   
   output$graf_1<- renderPlotly({
     
@@ -441,8 +485,10 @@ server <- function(input, output,  session) {
     a <- list(showticklabels = TRUE, tick0=min(df_serie()$Date), 
               tickformat = "%d %b",title = '',dtick=86400000.0 * 14, type="date")
     
-    t <- list(size = 10)
-
+    t <- list(
+     # family = "sans serif",
+      size = 10)
+    #  color = 'blue')
     
     if (ver_todo$data=="TODO EL MUNDO")
     {
@@ -461,7 +507,7 @@ server <- function(input, output,  session) {
       
     if (input$sGraficoPor=="Casos Acumulados")
     {
-    plot_ly(df, x=~Date, y=~confirmed, type="bar", orientation="v", name="Confirmados",#colors = pal_graf,
+    plot_ly(df, x=~Date, y=~confirmed, type="bar", orientation="v", name="Confirmados",colors = pal_graf,
       hovertemplate = paste('<b>Casos:</b>: %{y:.0f}',
                                   '<br><b>Fecha</b>: %{x}')
           )%>% 
@@ -486,7 +532,7 @@ server <- function(input, output,  session) {
     }
    else if (input$sGraficoPor=="Casos Reportados")
    {
-     plot_ly(df, x=~Date, y=~new_confirmed, type="bar", orientation="v", name="Confirmados",#colors = pal_graf,
+     plot_ly(df, x=~Date, y=~new_confirmed, type="bar", orientation="v", name="Confirmados",colors = pal_graf,
              hovertemplate = paste('<b>Casos:</b>: %{y:.0f}',
                                    '<br><b>Fecha</b>: %{x}'))%>% 
        add_trace(y = ~new_active, name = 'Activos',
@@ -509,14 +555,16 @@ server <- function(input, output,  session) {
                        font = list(size = 10)))
      
    }
-   else if (input$sGraficoPor=="Tasa de Letalidad")
-   {
-    #cat(df$tasa)
-        plot_ly(df, x=~Date, y=~tasa,  type='scatter',mode='markers+lines',
+    else if (input$sGraficoPor=="Tasa de Letalidad")
+    {
+      #df$tasa <- ifelse(df$confirmed>0,round((df$deaths/df$confirmed)*100,2),0)
+      #plot_ly(df, x=~Date, y=~round(new_deaths/deaths*100,2), type="scatter", mode='lines+markers', orientation="v",
+      plot_ly(df, x=~Date, y=~tasa, orientation="v", mode='lines+markers', type='scatter',
               name=input$sGraficoPor, 
               hovertemplate = paste("<b>Tasa:</b>: %{y:.,2%}",
                                     '<br><b>Fecha</b>: %{x}'))%>% 
         layout(
+        #  barmode = 'group',
           yaxis = list(title = input$sGraficoPor),
           xaxis = a,
           title = titulo,
@@ -524,9 +572,75 @@ server <- function(input, output,  session) {
                         xanchor = "center",  # use center of legend as anchor
                         x = 0.5,
                         font = list(size = 10)))
+      
     }
     
   } )
+  
+  
+
+  output$mapaciudades <- renderLeaflet({
+    
+    labels <- sprintf(
+      "<strong>%s</strong><br/>Confirmados: %s<br/>Muertes: %s<br/>Recuperados: %s<br/>Activos: %s",
+     df_ult_casos_c()$Province.State,
+     format(df_ult_casos_c()$confirmed, big.mark=".",small.mark=".", decimal.mark = ','),
+     format(df_ult_casos_c()$deaths, big.mark=".",small.mark=".", decimal.mark = ','),
+     format(df_ult_casos_c()$recovered, big.mark=".",small.mark=".", decimal.mark = ','),
+     format(df_ult_casos_c()$active, big.mark=".",small.mark=".", decimal.mark = ','))%>% lapply(htmltools::HTML)
+    
+    const <- 20
+    
+    leaflet()%>%
+      addTiles()%>%
+      setView(0,0,2)%>%
+        addCircles(data=df_ult_casos_c(),
+                          lng =~df_ult_casos_c()$Long, 
+                          lat = ~df_ult_casos_c()$Lat, 
+                          weight = 1,
+                          #popup = labels,
+                          color="Red",
+                          label=labels,
+                          opacity = .5,
+                          radius = ~(df_ult_casos_c()$confirmed*const),
+                          group="Confirmados")%>%
+      addCircles(data=df_ult_casos_c(),
+                       lng =~df_ult_casos_c()$Long, 
+                       lat = ~df_ult_casos_c()$Lat, 
+                       weight = 1,
+                       #popup = labels,
+                       color="Grey",
+                       label=labels,
+                       opacity = .5,
+                       radius = ~(df_ult_casos_c()$deaths*const),
+                       group="Muertes")%>%
+      addCircles(data=df_ult_casos_c(),
+                       lng =~df_ult_casos_c()$Long, 
+                       lat = ~df_ult_casos_c()$Lat, 
+                       weight = 1,
+                       #popup = labels,
+                       color="Green",
+                       label=labels,
+                       opacity = .5,
+                       radius = ~(df_ult_casos_c()$recovered*const),
+                       group="Recuperados")%>%
+      addCircles(data=df_ult_casos_c(),
+                 lng =~df_ult_casos_c()$Long, 
+                 lat = ~df_ult_casos_c()$Lat, 
+                 weight = 1,
+                 #popup = labels,
+                 color="Orange",
+                 label=labels,
+                 opacity = .5,
+                 radius = ~(df_ult_casos_c()$active*const),
+                 group="Activos")%>%
+      addLayersControl(
+        baseGroups = c("Confirmados","Activos","Muertes","Recuperados"),
+        options = layersControlOptions(collapsed = FALSE))
+    
+   
+    
+  })
   
  
 }

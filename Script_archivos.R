@@ -145,7 +145,7 @@ sum(df_temp$new_confirmed)
 sum(df_temp$new_deaths)
 sum(df_temp$active)
 sum(df_temp$new_active)
-
+ult_fecha
 
 #rm(df_full,df_temp, ult_fecha)
 rm(list=ls())
