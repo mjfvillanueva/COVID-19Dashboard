@@ -8,8 +8,7 @@ library(shiny)
 library(shinyjs)
 
 
-
-setwd("C:/Users/MJFerreyra/Documents/COVID-19/Deploy")
+#setwd("C:/Users/MJFerreyra/Documents/COVID-19/Deploy")
 df_full <-read.csv("./df_full.csv", stringsAsFactors = FALSE)
 
 #df_paises <- st_read("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson",stringsAsFactors =FALSE)
@@ -22,7 +21,6 @@ names(df_paises)[9]<- "location"
 #df_paises$ISO_A3 <- NULL
 #df_paises$ISO_A2 <- NULL
 
-
 df_paises <-df_full%>%group_by(Country.Region,Date)%>%
   summarise(confirmed=sum(confirmed, na.rm=T), 
             new_confirmed=sum(new_confirmed, na.rm=T),
@@ -32,7 +30,8 @@ df_paises <-df_full%>%group_by(Country.Region,Date)%>%
             new_deaths=sum(new_deaths, na.rm=T),
             active=sum(active, na.rm=T),
             new_active=sum(new_active, na.rm=T))%>%
-  select(confirmed,recovered,deaths,active,new_confirmed,new_recovered,new_deaths,new_active,Country.Region,Date)%>%
+  select(confirmed,recovered,deaths,active,new_confirmed,new_recovered,
+         new_deaths,new_active,Country.Region,Date)%>%
   left_join(df_paises, by= c("Country.Region"="location"))
 
 df_paises$Country.Region <- as.factor(df_paises$Country.Region)
@@ -89,7 +88,12 @@ theme = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/sandstone/bootstrap
                     selectInput(label="Seleccione Pais o TODO EL MUNDO:", inputId="sPais",choices=c("TODO EL MUNDO",levels(df_paises$Country.Region)),
                                 selected="TODO EL MUNDO")),
                 div(style = "display:inline-block; width: 40%;",
-                    selectInput(label="Seleccione Analisis:",inputId="sGraficoPor",choices=c("Casos Acumulados","Casos Reportados","Tasa de Letalidad"), 
+                    selectInput(label="Seleccione Indicador:",inputId="sGraficoPor",choices=c("Casos Acumulados",
+                                                                                             "Casos Reportados Diarios",
+                                                                                             "Tasa de Letalidad"
+                                                                                            # "Tasa de Incidencia",
+                                                                                            # "Tasa de Prevalencia"
+                                                                                           ), 
                                 selected="Casos Acumulados")),
               plotlyOutput("graf_1", height = "400", width = "100%")
             ),
@@ -104,10 +108,14 @@ theme = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/sandstone/bootstrap
 
 
 server <- function(input, output,  session) {
- options(shiny.trace=T)
+# options(shiny.trace=T)
   
    fecha_ult_dato <- reactive(
      max(ymd(df_paises$Date))
+   )
+   
+   fecha_ayer <- reactive (
+     fecha_ult_dato()-1
    )
    
    df_ult_casos <- reactive({
@@ -121,7 +129,7 @@ server <- function(input, output,  session) {
    df_serie <- reactive({
      
    
-    df_serie <- df_paises%>%group_by(Date=ymd(Date), Country.Region)%>%
+    df_serie <- df_paises%>%group_by(Date=ymd(Date), Country.Region, pop_est)%>%
        summarise(confirmed=sum(confirmed, na.rm=T), 
                  new_confirmed=sum(new_confirmed, na.rm=T),
                  recovered=sum(recovered, na.rm=T), 
@@ -131,7 +139,9 @@ server <- function(input, output,  session) {
                  active=sum(active, na.rm=T),
                  new_active=sum(new_active, na.rm=T))
 
-    df_serie$tasa <- ifelse(df_serie$confirmed>0,round((df_serie$deaths/df_serie$confirmed)*100,2),0)
+    df_serie$tasa_letal <- ifelse(df_serie$confirmed>0,round((df_serie$deaths/df_serie$confirmed)*100,2),0)
+    df_serie$tasa_incid <- ifelse(df_serie$pop_est>0,round((df_serie$active/df_serie$pop_est)*100000,2),0)
+    df_serie$tasa_preva <- ifelse(df_serie$pop_est>0,round((df_serie$new_confirmed/df_serie$pop_est)*100000,2),0)
      
     df_serie 
    })
@@ -147,40 +157,78 @@ server <- function(input, output,  session) {
    rec_porc <- reactive( {paste(as.character(round(sum(df_ult_casos()$new_recovered, na.rm=T)/(casos_rec()-sum(df_ult_casos()$new_recovered, na.rm=T))*100,2))," %") })
    
    output$conf_html <- renderUI({
+     
+     iconT<- ""
+     if (sum(df_ult_casos()$new_confirmed, na.rm=T) >0)
+       
+       iconT<- icon('fas fa-arrow-circle-up')
+     else
+       iconT<- icon('fas fa-arrow-circle-down')
+     
+     
      tagList(
        h1(format(casos_conf(), big.mark=".",small.mark=".", decimal.mark = ',') ),
        h3("CONFIRMADOS"),
-       icon('fas fa-arrow-circle-up'),
-       conf_porc()
+       iconT,
+      # icon('fas fa-arrow-circle-up'),
+       conf_porc(),
+       paste("(variación desde" , format(fecha_ayer(),"%d/%m/%Y"),")")
      )
      
    })
    output$act_html <- renderUI({
+     iconT<- ""
+     if (sum(df_ult_casos()$new_active, na.rm=T) >0)
+       
+       iconT<- icon('fas fa-arrow-circle-up')
+     else
+       iconT<- icon('fas fa-arrow-circle-down')
+     
+     
      tagList(
        h1(format(casos_act(), big.mark=".",small.mark=".", decimal.mark = ',') ),
        h3("ACTIVOS"),
        icon('fas fa-arrow-circle-up'),
-       act_porc()
+       act_porc(),
+       paste("(variación desde" , format(fecha_ayer(),"%d/%m/%Y"),")")
      )
      
    })
    
    output$muer_html <- renderUI({
+     iconT<- ""
+     if (sum(df_ult_casos()$new_deaths, na.rm=T) >0)
+       
+       iconT<- icon('fas fa-arrow-circle-up')
+     else
+       iconT<- icon('fas fa-arrow-circle-down')
+     
+     
      tagList(
        h1(format(casos_muer(), big.mark=".",small.mark=".", decimal.mark = ',') ),
        h3("MUERTES"),
        icon('fas fa-arrow-circle-up'),
-       muer_porc()
+       muer_porc(),
+       paste("(variación desde" , format(fecha_ayer(),"%d/%m/%Y"),")")
      )
      
    })
    
    output$rec_html <- renderUI({
+     iconT<- ""
+     if (sum(df_ult_casos()$new_recovered, na.rm=T) >0)
+       
+       iconT<- icon('fas fa-arrow-circle-up')
+     else
+       iconT<- icon('fas fa-arrow-circle-down')
+     
+     
      tagList(
        h1(format(casos_rec(), big.mark=".",small.mark=".", decimal.mark = ',') ),
        h3("RECUPERADOS"),
        icon('fas fa-arrow-circle-up'),
-       rec_porc()
+       rec_porc(),
+       paste("(variación desde" , format(fecha_ayer(),"%d/%m/%Y"),")")
      )
      
    })
@@ -198,7 +246,74 @@ server <- function(input, output,  session) {
   
     output$mapapais <- renderLeaflet({
       
-      labels <- sprintf(
+      popop <-sprintf(
+        "<strong>%s</strong><br/>Click para ver mas datos",
+        df_ult_casos()$Country.Region)%>% lapply(htmltools::HTML)
+     
+      labels <- sprintf("<strong>%s</strong><br>
+      <style>
+                           th {  
+                        text-align: left;
+                      }
+                      td {  
+                        text-align: right;
+                      }
+                      th, td {
+                        padding-right:5px;
+                        padding-left:5px;
+                      }
+                      p { font-size: x-small }
+                      </style>
+      <table>
+      <tr>
+        <th></th>
+        <th>Casos</th>
+        <th>Variacion</th>
+      </tr>
+      <tr style='padding:10px'>
+        <td style='text-align:left'>Confirmados</td>
+        <td>%s</td>
+        <td>%s</td></tr>
+      <tr>
+        <td style='text-align:left'>Activos</td>
+        <td>%s</td>
+        <td>%s</td></tr>
+      <tr>
+        <td style='text-align:left'>Muertes</td>
+        <td>%s</td>
+        <td>%s</td></tr>
+      <tr>
+        <td style='text-align:left'>Recuperados</td>
+        <td>%s</td>
+        <td>%s</td></tr>
+                      </table><p>*El porcentaje representa la variacion desde ayer</p>",
+        df_ult_casos()$Country.Region,
+        format(df_ult_casos()$confirmed, big.mark=".",small.mark=".", decimal.mark = ','),paste0(" ",
+              ifelse(df_ult_casos()$new_confirmed ==0,"",ifelse(df_ult_casos()$new_confirmed >0 ,
+                      "<i class='fas fa-arrow-circle-up''></i>", "<i class='fas fa-arrow-circle-down'></i>")),
+               round(ifelse((df_ult_casos()$confirmed-df_ult_casos()$new_confirmed)==0,0,df_ult_casos()$new_confirmed/(df_ult_casos()$confirmed-df_ult_casos()$new_confirmed)*100),1),
+               "%"),
+        format(df_ult_casos()$active, big.mark=".",small.mark=".", decimal.mark = ','),
+        paste0(" ",
+             ifelse(df_ult_casos()$new_active ==0 ,"",ifelse(df_ult_casos()$new_active >0 ,
+                     "<i class='fas fa-arrow-circle-up''></i>", "<i class='fas fa-arrow-circle-down'></i>")),
+              round(ifelse((df_ult_casos()$active-df_ult_casos()$new_active)==0,0,df_ult_casos()$new_active/(df_ult_casos()$active-df_ult_casos()$new_active)*100),1),
+              "%"),
+        format(df_ult_casos()$deaths, big.mark=".",small.mark=".", decimal.mark = ','),
+        paste0(" ",
+              ifelse(df_ult_casos()$new_deaths ==0 ,"",ifelse(df_ult_casos()$new_deaths >0 ,
+                      "<i class='fas fa-arrow-circle-up''></i>", "<i class='fas fa-arrow-circle-down'></i>")),
+               round(ifelse((df_ult_casos()$deaths-df_ult_casos()$new_deaths)==0,0,df_ult_casos()$new_deaths/(df_ult_casos()$deaths-df_ult_casos()$new_deaths)*100),1),
+               "%"),
+        
+        format(df_ult_casos()$recovered, big.mark=".",small.mark=".", decimal.mark = ','),
+        paste0(" ",
+               ifelse(df_ult_casos()$new_recovered ==0 ,"", ifelse(df_ult_casos()$new_recovered >0 ,
+                      "<i class='fas fa-arrow-circle-up''></i>", "<i class='fas fa-arrow-circle-down'></i>")),
+               round(ifelse((df_ult_casos()$recovered-df_ult_casos()$new_recovered)==0,0,df_ult_casos()$new_recovered/(df_ult_casos()$recovered-df_ult_casos()$new_recovered)*100),1),
+               "%") %>%lapply(htmltools::HTML))
+      
+      labels2 <- sprintf(
            "<strong>%s</strong><br/>Confirmados: %s<br/>Muertes: %s<br/>Recuperados: %s<br/>Activos: %s",
            df_ult_casos()$Country.Region,
            paste0(format(df_ult_casos()$confirmed, big.mark=".",small.mark=".", decimal.mark = ',')," (",
@@ -221,7 +336,9 @@ server <- function(input, output,  session) {
             ifelse((df_ult_casos()$active-df_ult_casos()$new_active) >0 ,
                    "+", ""),
             round(ifelse((df_ult_casos()$active-df_ult_casos()$new_active)==0,0,df_ult_casos()$new_active/(df_ult_casos()$active-df_ult_casos()$new_active)*100),1),
-            "%)")%>% lapply(htmltools::HTML))
+            "%)")%>%lapply(htmltools::HTML))
+      
+    
       
       bin1 <- c(1,100,500,3000,50000,150000,1500000)
       palc <- colorBin(palette ="YlOrRd", domain = df_ult_casos()$confirmed, bins = bin1)
@@ -244,6 +361,7 @@ server <- function(input, output,  session) {
                      fillOpacity = 0.6,
                      color=palc(df_ult_casos()$confirmed),
                      popup=labels,
+                     label=popop,
                      layerId =paste0("c",df_ult_casos()$Country.Region),
                      highlightOptions = highlightOptions(color = "white", 
                                                          weight = 0.8, bringToFront = TRUE))%>%
@@ -261,6 +379,7 @@ server <- function(input, output,  session) {
                       fillOpacity = 0.6,
                       color=pald(df_ult_casos()$deaths),
                       popup=labels,
+                      label=popop,
                       layerId =paste0("d",df_ult_casos()$Country.Region),
                       highlightOptions = highlightOptions(color = "white", 
                                                           weight = 0.8, bringToFront = TRUE),
@@ -273,6 +392,7 @@ server <- function(input, output,  session) {
                       color=palr(df_ult_casos()$recovered),
                       layerId =paste0("r",df_ult_casos()$Country.Region),
                       popup=labels,
+                      label=popop,
                       highlightOptions = highlightOptions(color = "white", 
                                                           weight = 0.8, bringToFront = TRUE),
                       group="Recuperados")%>%
@@ -283,13 +403,14 @@ server <- function(input, output,  session) {
                       fillOpacity = 0.6,
                       color=pala(df_ult_casos()$active),
                       popup=labels,
+                      label=popop,
                       layerId =paste0("a",df_ult_casos()$Country.Region),
                       highlightOptions = highlightOptions(color = "white", 
                                                           weight = 0.8, bringToFront = TRUE),
                       group="Activos")%>%
           addLayersControl(
             baseGroups = c("Confirmados","Activos","Muertes","Recuperados"),
-            options = layersControlOptions(collapsed = FALSE))
+            options = layersControlOptions(collapsed = TRUE))
       
          
     })
@@ -391,9 +512,12 @@ server <- function(input, output,  session) {
                  deaths=sum(deaths, na.rm=T),
                  new_deaths=sum(new_deaths, na.rm=T),
                  active=sum(active, na.rm=T),
-                 new_active=sum(new_active, na.rm=T))
+                 new_active=sum(new_active, na.rm=T),
+                 pop_est= sum(pop_est,na.rm = T))
 
-     df_serie_todo$tasa <- ifelse(df_serie_todo$confirmed>0,round((df_serie_todo$deaths/df_serie_todo$confirmed)*100,2),0)
+     df_serie_todo$tasa_letal <- ifelse(df_serie_todo$confirmed>0,round((df_serie_todo$deaths/df_serie_todo$confirmed)*100,2),0)
+     df_serie_todo$tasa_incid <- ifelse(df_serie_todo$pop_est>0,round((df_serie_todo$active/df_serie_todo$pop_est)*100000,2),0)
+     df_serie_todo$tasa_preva <- ifelse(df_serie_todo$pop_est>0,round((df_serie_todo$new_confirmed/df_serie_todo$pop_est)*100000,2),0)
      
      df_serie_todo 
      
@@ -438,10 +562,7 @@ server <- function(input, output,  session) {
   output$graf_1<- renderPlotly({
     
 
-    a <- list(showticklabels = TRUE, tick0=min(df_serie()$Date), 
-              tickformat = "%d %b",title = '',dtick=86400000.0 * 14, type="date")
-    
-    t <- list(size = 10)
+   
 
     
     if (ver_todo$data=="TODO EL MUNDO")
@@ -454,10 +575,16 @@ server <- function(input, output,  session) {
     else
     {
  
-      df<-df_serie()%>%filter(Country.Region== ver_todo$data)
+      df<-df_serie()%>%filter(Country.Region== ver_todo$data & confirmed > 0)
       
       titulo <- paste(input$sGraficoPor,ver_todo$data,sep=" ")
     }
+    
+    
+    a <- list(showticklabels = TRUE, tick0=min(df$Date), 
+              tickformat = "%d %b",title = '',dtick=86400000.0 * 14, type="date")
+    
+    t <- list(size = 10)
       
     if (input$sGraficoPor=="Casos Acumulados")
     {
@@ -476,7 +603,8 @@ server <- function(input, output,  session) {
                                       '<br><b>Fecha</b>: %{x}'))%>%
      layout(
         barmode = 'group',
-        yaxis = list(title = input$sGraficoPor),
+       # yaxis = list(title = input$sGraficoPor),
+        yaxis = list(title = ""),
         xaxis = a,
         title = titulo,font=t,
         legend = list(orientation = "h",   # show entries horizontally
@@ -484,20 +612,20 @@ server <- function(input, output,  session) {
                       x = 0.5,
                       font = list(size = 10)))
     }
-   else if (input$sGraficoPor=="Casos Reportados")
+   else if (input$sGraficoPor=="Casos Reportados Diarios")
    {
      plot_ly(df, x=~Date, y=~new_confirmed, type="bar", orientation="v", name="Confirmados",#colors = pal_graf,
              hovertemplate = paste('<b>Casos:</b>: %{y:.0f}',
                                    '<br><b>Fecha</b>: %{x}'))%>% 
-       add_trace(y = ~new_active, name = 'Activos',
-                 hovertemplate = paste('<b>Casos:</b>: %{y:.0f}',
-                                       '<br><b>Fecha</b>: %{x}'))%>%
+     #  add_trace(y = ~new_active, name = 'Activos',
+    #             hovertemplate = paste('<b>Casos:</b>: %{y:.0f}',
+       #                                '<br><b>Fecha</b>: %{x}'))%>%
        add_trace(y = ~new_deaths, name = 'Muertes',
                  hovertemplate = paste('<b>Casos:</b>: %{y:.0f}',
                                        '<br><b>Fecha</b>: %{x}'))%>% 
-       add_trace(y = ~new_recovered, name = 'Recuperados',
-                 hovertemplate = paste('<b>Casos:</b>: %{y:.0f}',
-                                       '<br><b>Fecha</b>: %{x}'))%>%
+      # add_trace(y = ~new_recovered, name = 'Recuperados',
+      #           hovertemplate = paste('<b>Casos:</b>: %{y:.0f}',
+      #                                 '<br><b>Fecha</b>: %{x}'))%>%
        layout(
          barmode = 'group',
          yaxis = list(title = input$sGraficoPor),
@@ -509,10 +637,43 @@ server <- function(input, output,  session) {
                        font = list(size = 10)))
      
    }
+
    else if (input$sGraficoPor=="Tasa de Letalidad")
    {
     #cat(df$tasa)
-        plot_ly(df, x=~Date, y=~tasa,  type='scatter',mode='markers+lines',
+        plot_ly(df, x=~Date, y=~tasa_letal,  type='scatter',mode='markers+lines',
+              name=input$sGraficoPor, 
+              hovertemplate = paste("<b>Tasa:</b>: %{y:.,2%}",
+                                    '<br><b>Fecha</b>: %{x}'))%>% 
+        layout(
+          yaxis = list(title = input$sGraficoPor),
+          xaxis = a,
+          title = titulo,
+          legend = list(orientation = "h",   # show entries horizontally
+                        xanchor = "center",  # use center of legend as anchor
+                        x = 0.5,
+                        font = list(size = 10)))
+   }
+  else if (input$sGraficoPor=="Tasa de Incidencia")
+  {
+    #cat(df$tasa)
+    plot_ly(df, x=~Date, y=~tasa_incid,  type='scatter',mode='markers+lines',
+            name=input$sGraficoPor, 
+            hovertemplate = paste("<b>Tasa:</b>: %{y:.,2%}",
+                                  '<br><b>Fecha</b>: %{x}'))%>% 
+      layout(
+        yaxis = list(title = input$sGraficoPor),
+        xaxis = a,
+        title = titulo,
+        legend = list(orientation = "h",   # show entries horizontally
+                      xanchor = "center",  # use center of legend as anchor
+                      x = 0.5,
+                      font = list(size = 10)))
+  }
+    else if (input$sGraficoPor=="Tasa de Prevalencia")
+    {
+      #cat(df$tasa)
+      plot_ly(df, x=~Date, y=~tasa_preva,  type='scatter',mode='markers+lines',
               name=input$sGraficoPor, 
               hovertemplate = paste("<b>Tasa:</b>: %{y:.,2%}",
                                     '<br><b>Fecha</b>: %{x}'))%>% 

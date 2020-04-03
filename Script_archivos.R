@@ -87,7 +87,7 @@ df_recovered <-df_recovered%>%
 df_recovered$new_recovered <-df_recovered$recovered-df_recovered$anterior
 
 
-df_recovered$new_recovered[df_recovered$new_recovered<0]<-0
+#df_recovered$new_recovered[df_recovered$new_recovered<0]<-0
 
 
 #head(df_deaths)  
@@ -105,10 +105,21 @@ df_full <-df_confirmed%>%left_join(df_deaths, by = c("Province.State","Country.R
   select(Province.State,Country.Region,Lat,Long,Date,confirmed, new_confirmed, deaths, new_deaths, recovered, new_recovered)
 
 df_full$active<-df_full$confirmed-df_full$deaths-df_full$recovered
+
+df_full$active[df_full$active<0]<-0
+
 df_full$new_active<-df_full$new_confirmed-df_full$new_deaths-df_full$new_recovered
 
+df_active <-df_full%>%
+  mutate(grouping=sprintf("%s-%s-%s",Country.Region,Province.State,Date))%>% 
+  mutate(anterior = lag(active, order_by=grouping)) %>% select(-grouping)
 
-df_full$new_active[df_full$new_active<0]<-0
+
+
+df_full$new_active <-df_full$active-df_active$anterior
+
+
+#df_full$new_active[df_full$new_active<0]<-0
 
 #df_full <-df_full [-1,] 
 
