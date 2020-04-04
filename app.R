@@ -340,10 +340,10 @@ server <- function(input, output,  session) {
       
     
       
-      bin1 <- c(1,100,500,3000,50000,150000,1500000)
+      bin1 <- c(1,500,5000,50000,200000,2000000)
       palc <- colorBin(palette ="YlOrRd", domain = df_ult_casos()$confirmed, bins = bin1)
     
-      bin2 <- c(0,1,500,1500,3000,10000)
+      bin2 <- c(0,1,1000,3000,10000,30000)
       pald <- colorBin(palette ="Greys", domain = df_ult_casos()$deaths, bins = bin2)
       
       bin3 <- c(0,1,100,500,3000,10000,50000,300000)
@@ -371,7 +371,7 @@ server <- function(input, output,  session) {
           #opacity = 0.7, 
           opacity = 0.6,
           title = "Casos confirmados",
-          position = "bottomleft")%>%
+          position = "bottomright")%>%
           addPolygons(data = df_ult_casos()$geometry,
                       weight = 0.5, 
                       smoothFactor = 0.5,
@@ -417,10 +417,10 @@ server <- function(input, output,  session) {
     observeEvent(input$mapapais_groups,{
       
       
-      bin1 <- c(1,100,500,3000,50000,150000,1500000)
+      bin1 <- c(1,500,5000,50000,200000,2000000)
       palc <- colorBin(palette ="YlOrRd", domain = df_ult_casos()$confirmed, bins = bin1)
       
-      bin2 <- c(0,1,500,1500,3000,10000)
+      bin2 <- c(0,1,1000,3000,10000,30000)
       pald <- colorBin(palette ="Greys", domain = df_ult_casos()$deaths, bins = bin2)
       
       bin3 <- c(0,1,100,500,3000,10000,50000,300000)
@@ -441,7 +441,7 @@ server <- function(input, output,  session) {
             #opacity = 0.7, 
             opacity = 0.6,
             title = "Casos confirmados",
-            position = "bottomleft",
+            position = "bottomright",
             group="Confirmados")
       }
       
@@ -453,7 +453,7 @@ server <- function(input, output,  session) {
           #opacity = 0.7, 
           opacity = 0.6,
           title = "Muertes",
-          position = "bottomleft",
+          position = "bottomright",
           group="Muertes")
       }
       else if (input$mapapais_groups == "Recuperados")
@@ -464,7 +464,7 @@ server <- function(input, output,  session) {
           #opacity = 0.7, 
           opacity = 0.6,
           title = "Recuperados",
-          position = "bottomleft",
+          position = "bottomright",
           group="Recuperados")
       }
       else if (input$mapapais_groups == "Activos")
@@ -475,7 +475,7 @@ server <- function(input, output,  session) {
           #opacity = 0.7, 
           opacity = 0.6,
           title = "Activos",
-          position = "bottomleft",
+          position = "bottomright",
           group="Activos")
       }
       
@@ -561,10 +561,6 @@ server <- function(input, output,  session) {
   
   output$graf_1<- renderPlotly({
     
-
-   
-
-    
     if (ver_todo$data=="TODO EL MUNDO")
     {
     
@@ -601,7 +597,7 @@ server <- function(input, output,  session) {
       add_trace(y = ~recovered, name = 'Recuperados',
                 hovertemplate = paste('<b>Casos:</b>: %{y:.0f}',
                                       '<br><b>Fecha</b>: %{x}'))%>%
-     layout(
+     layout(hovermode='compare',
         barmode = 'group',
        # yaxis = list(title = input$sGraficoPor),
         yaxis = list(title = ""),
@@ -610,7 +606,7 @@ server <- function(input, output,  session) {
         legend = list(orientation = "h",   # show entries horizontally
                       xanchor = "center",  # use center of legend as anchor
                       x = 0.5,
-                      font = list(size = 10)))
+                      font = list(size = 10)))%>%config(displayModeBar = F)
     }
    else if (input$sGraficoPor=="Casos Reportados Diarios")
    {
@@ -626,7 +622,7 @@ server <- function(input, output,  session) {
       # add_trace(y = ~new_recovered, name = 'Recuperados',
       #           hovertemplate = paste('<b>Casos:</b>: %{y:.0f}',
       #                                 '<br><b>Fecha</b>: %{x}'))%>%
-       layout(
+       layout(hovermode='compare',
          barmode = 'group',
          yaxis = list(title = input$sGraficoPor),
          xaxis = a,
@@ -634,17 +630,17 @@ server <- function(input, output,  session) {
          legend = list(orientation = "h",   # show entries horizontally
                        xanchor = "center",  # use center of legend as anchor
                        x = 0.5,
-                       font = list(size = 10)))
+                       font = list(size = 10)))%>%config(displayModeBar = T)
      
    }
 
    else if (input$sGraficoPor=="Tasa de Letalidad")
    {
     #cat(df$tasa)
-        plot_ly(df, x=~Date, y=~tasa_letal,  type='scatter',mode='markers+lines',
+        plot_ly(df%>%ungroup(), x=~Date, y=~tasa_letal, type='scatter',mode='markers+lines',
               name=input$sGraficoPor, 
               hovertemplate = paste("<b>Tasa:</b>: %{y:.,2%}",
-                                    '<br><b>Fecha</b>: %{x}'))%>% 
+                                    '<br><b>Fecha</b>: %{x}'))%>%
         layout(
           yaxis = list(title = input$sGraficoPor),
           xaxis = a,
@@ -652,7 +648,7 @@ server <- function(input, output,  session) {
           legend = list(orientation = "h",   # show entries horizontally
                         xanchor = "center",  # use center of legend as anchor
                         x = 0.5,
-                        font = list(size = 10)))
+                        font = list(size = 10)))%>%config(displayModeBar = T)
    }
   else if (input$sGraficoPor=="Tasa de Incidencia")
   {
@@ -661,14 +657,14 @@ server <- function(input, output,  session) {
             name=input$sGraficoPor, 
             hovertemplate = paste("<b>Tasa:</b>: %{y:.,2%}",
                                   '<br><b>Fecha</b>: %{x}'))%>% 
-      layout(
+      layout(hovermode='compare',
         yaxis = list(title = input$sGraficoPor),
         xaxis = a,
         title = titulo,
         legend = list(orientation = "h",   # show entries horizontally
                       xanchor = "center",  # use center of legend as anchor
                       x = 0.5,
-                      font = list(size = 10)))
+                      font = list(size = 10)))%>%config(displayModeBar = T)
   }
     else if (input$sGraficoPor=="Tasa de Prevalencia")
     {
@@ -677,14 +673,14 @@ server <- function(input, output,  session) {
               name=input$sGraficoPor, 
               hovertemplate = paste("<b>Tasa:</b>: %{y:.,2%}",
                                     '<br><b>Fecha</b>: %{x}'))%>% 
-        layout(
+        layout(hovermode='compare',
           yaxis = list(title = input$sGraficoPor),
           xaxis = a,
           title = titulo,
           legend = list(orientation = "h",   # show entries horizontally
                         xanchor = "center",  # use center of legend as anchor
                         x = 0.5,
-                        font = list(size = 10)))
+                        font = list(size = 10)))%>%config(displayModeBar = T)
     }
     
   } )
