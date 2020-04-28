@@ -1,15 +1,18 @@
-library(leaflet)
-library(tidyverse)
+#library(leaflet)
+#library(tidyverse)
+#library(sf)
+#library(plotly)
+#library(lubridate)
+#library(shiny)
 library(DT)
-library(sf)
-library(plotly)
-library(lubridate)
-library(shiny)
 library(shinyjs)
 
 
+source("./Script_archivos.R")
+
+
 #setwd("C:/Users/MJFerreyra/Documents/COVID-19/Deploy")
-df_full <-read.csv("./df_full.csv", stringsAsFactors = FALSE)
+#df_full <-read.csv("./df_full.csv", stringsAsFactors = FALSE)
 
 #df_paises <- st_read("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson",stringsAsFactors =FALSE)
 #df_paises <- st_read("./countries.geojson",stringsAsFactors =FALSE)
@@ -21,16 +24,20 @@ names(df_paises)[9]<- "location"
 #df_paises$ISO_A3 <- NULL
 #df_paises$ISO_A2 <- NULL
 
-df_paises <-df_full%>%group_by(Country.Region,Date)%>%
-  summarise(confirmed=sum(confirmed, na.rm=T), 
-            new_confirmed=sum(new_confirmed, na.rm=T),
-            recovered=sum(recovered, na.rm=T), 
-            new_recovered=sum(new_recovered, na.rm=T),
-            deaths=sum(deaths, na.rm=T),
-            new_deaths=sum(new_deaths, na.rm=T),
-            active=sum(active, na.rm=T),
-            new_active=sum(new_active, na.rm=T))%>%
-  select(confirmed,recovered,deaths,active,new_confirmed,new_recovered,
+# df_paises <-df_full%>%group_by(Country.Region,Date)%>%
+#   summarise(confirmed=sum(confirmed, na.rm=T), 
+#             new_confirmed=sum(new_confirmed, na.rm=T),
+#             recovered=sum(recovered, na.rm=T), 
+#             new_recovered=sum(new_recovered, na.rm=T),
+#             deaths=sum(deaths, na.rm=T),
+#             new_deaths=sum(new_deaths, na.rm=T),
+#             active=sum(active, na.rm=T),
+#             new_active=sum(new_active, na.rm=T))%>%
+#   select(confirmed,recovered,deaths,active,new_confirmed,new_recovered,
+#          new_deaths,new_active,Country.Region,Date)%>%
+#   left_join(df_paises, by= c("Country.Region"="location"))
+
+df_paises <-df_full%>%select(confirmed,recovered,deaths,active,new_confirmed,new_recovered,
          new_deaths,new_active,Country.Region,Date)%>%
   left_join(df_paises, by= c("Country.Region"="location"))
 
@@ -46,10 +53,11 @@ theme = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/sandstone/bootstrap
 
  fluidRow(style = "padding: 0px;",
           column(style="padding:0px;",
-            width = 6, h3("COVID-19 Dashboard"),
-           # tagList(icon("globe-americas", "fa-2x"),
-          #          h3("COVID-19 Dashboard")
-          #          )
+            width = 6, 
+           # h2("COVID-19 Dashboard"),h5("Seguimiento mundial de la pandemia del coronavirus"),
+            tagList(h3(icon("globe-americas", "fa-x"),
+                    "COVID-19 Dashboard"),h6("Seguimiento mundial de la pandemia del coronavirus")
+                    ),
               offset = 0),
           column(style="padding:0px;",
             width = 6,align="right",
@@ -81,8 +89,7 @@ theme = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/sandstone/bootstrap
       column(width=5,offset=0,style = "padding: 0px;",
              
         tabsetPanel(
-          tabPanel(style = "padding: 10px;",
-            "Grafico", height ="100%",width = "100%",
+          tabPanel(style = "padding: 10px;", "Grafico", height ="100%",width = "100%",
 
                 div(style = "display:inline-block; width: 40%;",
                     selectInput(label="Seleccione Pais o TODO EL MUNDO:", inputId="sPais",choices=c("TODO EL MUNDO",levels(df_paises$Country.Region)),
@@ -90,12 +97,15 @@ theme = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/sandstone/bootstrap
                 div(style = "display:inline-block; width: 40%;",
                     selectInput(label="Seleccione Indicador:",inputId="sGraficoPor",choices=c("Casos Acumulados",
                                                                                              "Casos Reportados Diarios",
-                                                                                             "Tasa de Letalidad"
-                                                                                            # "Tasa de Incidencia",
-                                                                                            # "Tasa de Prevalencia"
+                                                                                             "Tasa de Letalidad",
+                                                                                             "Tasa de Incidencia",
+                                                                                             "Tasa de Prevalencia"
                                                                                            ), 
-                                selected="Casos Acumulados")),
-              plotlyOutput("graf_1", height = "400", width = "100%")
+                                selected="Casos Acumulados")
+                    ),
+              plotlyOutput("graf_1", height = "370", width = "100%"),
+              br(),
+              uiOutput("referencia")
             ),
           tabPanel("Datos",height =490,
                    style = "padding: 10px;",
@@ -234,14 +244,21 @@ server <- function(input, output,  session) {
    })
   
    output$actualizacion<- renderUI({ 
-     tagList("Actualizacion diaria, dataset ",
-        a("HDX", href = "https://data.humdata.org/dataset/novel-coronavirus-2019-ncov-cases"),
-        ". Última actualizacion", 
-        format(fecha_ult_dato(),"%d/%m/%Y"), 
-        tags$br(),
-        a("by MJFV", href = "mailto:mjferreyra@hotmail.com")
+     tagList(h5("Fuente de datos: ",
+             a("2019 Novel Coronavirus COVID-19 (2019-nCoV) Data Repository", 
+          href = "https://github.com/CSSEGISandData/COVID-19"), " en github."),
+          h6( "Última actualización ", format(fecha_ult_dato(),"%d/%m/%Y"), 
+       # tags$br(),
+        a("by MJFV", href = "mailto:mjferreyra@hotmail.com"))
      )
     })
+   output$referencia<- renderUI({
+    switch(input$sGraficoPor, 
+            
+            "Tasa de Letalidad"="Calculo de Tasa de Letalidad : Muertes / Casos confirmados. Cada 100 confirmados",
+            "Tasa de Incidencia"="Calculo de Tasa de Incidencia: Casos activos / Poblacion estimada. Cada 100.000 habitantes",
+            "Tasa de Prevalencia"="Calculo de Tasa de Prevalencia: Casos reportados diarios / Poblacion estimada. Cada 100.000 habitantes")
+     })
   
   
     output$mapapais <- renderLeaflet({
@@ -340,7 +357,7 @@ server <- function(input, output,  session) {
       
     
       
-      bin1 <- c(1,500,5000,50000,200000,2000000)
+      bin1 <- c(1,500,5000,50000,200000,1000000,3000000)
       palc <- colorBin(palette ="YlOrRd", domain = df_ult_casos()$confirmed, bins = bin1)
     
       bin2 <- c(0,1,1000,3000,10000,30000)
@@ -417,7 +434,7 @@ server <- function(input, output,  session) {
     observeEvent(input$mapapais_groups,{
       
       
-      bin1 <- c(1,500,5000,50000,200000,2000000)
+      bin1 <- c(1,500,5000,50000,200000,1000000,3000000)
       palc <- colorBin(palette ="YlOrRd", domain = df_ult_casos()$confirmed, bins = bin1)
       
       bin2 <- c(0,1,1000,3000,10000,30000)
@@ -584,7 +601,7 @@ server <- function(input, output,  session) {
       
     if (input$sGraficoPor=="Casos Acumulados")
     {
-    plot_ly(df, x=~Date, y=~confirmed, type="bar", orientation="v", name="Confirmados",#colors = pal_graf,
+    plot_ly(df%>%ungroup(), x=~Date, y=~confirmed, type='scatter',mode='lines', orientation="v", name="Confirmados",#colors = pal_graf,
       hovertemplate = paste('<b>Casos:</b>: %{y:.0f}',
                                   '<br><b>Fecha</b>: %{x}')
           )%>% 
@@ -597,8 +614,8 @@ server <- function(input, output,  session) {
       add_trace(y = ~recovered, name = 'Recuperados',
                 hovertemplate = paste('<b>Casos:</b>: %{y:.0f}',
                                       '<br><b>Fecha</b>: %{x}'))%>%
-     layout(hovermode='compare',
-        barmode = 'group',
+     layout(#hovermode='compare',
+        #barmode = 'group',
        # yaxis = list(title = input$sGraficoPor),
         yaxis = list(title = ""),
         xaxis = a,
@@ -630,14 +647,14 @@ server <- function(input, output,  session) {
          legend = list(orientation = "h",   # show entries horizontally
                        xanchor = "center",  # use center of legend as anchor
                        x = 0.5,
-                       font = list(size = 10)))%>%config(displayModeBar = T)
+                       font = list(size = 10)))%>%config(displayModeBar = T)%>%config(displayModeBar = F)
      
    }
 
    else if (input$sGraficoPor=="Tasa de Letalidad")
    {
     #cat(df$tasa)
-        plot_ly(df%>%ungroup(), x=~Date, y=~tasa_letal, type='scatter',mode='markers+lines',
+        plot_ly(df%>%ungroup(), x=~Date, y=~tasa_letal, type='scatter',mode='lines',
               name=input$sGraficoPor, 
               hovertemplate = paste("<b>Tasa:</b>: %{y:.,2%}",
                                     '<br><b>Fecha</b>: %{x}'))%>%
@@ -648,12 +665,12 @@ server <- function(input, output,  session) {
           legend = list(orientation = "h",   # show entries horizontally
                         xanchor = "center",  # use center of legend as anchor
                         x = 0.5,
-                        font = list(size = 10)))%>%config(displayModeBar = T)
+                        font = list(size = 10)))%>%config(displayModeBar = F)
    }
   else if (input$sGraficoPor=="Tasa de Incidencia")
   {
     #cat(df$tasa)
-    plot_ly(df, x=~Date, y=~tasa_incid,  type='scatter',mode='markers+lines',
+    plot_ly(df%>%ungroup(), x=~Date, y=~tasa_incid,  type='scatter',mode='lines',
             name=input$sGraficoPor, 
             hovertemplate = paste("<b>Tasa:</b>: %{y:.,2%}",
                                   '<br><b>Fecha</b>: %{x}'))%>% 
@@ -664,12 +681,12 @@ server <- function(input, output,  session) {
         legend = list(orientation = "h",   # show entries horizontally
                       xanchor = "center",  # use center of legend as anchor
                       x = 0.5,
-                      font = list(size = 10)))%>%config(displayModeBar = T)
+                      font = list(size = 10)))%>%config(displayModeBar = F)
   }
     else if (input$sGraficoPor=="Tasa de Prevalencia")
     {
       #cat(df$tasa)
-      plot_ly(df, x=~Date, y=~tasa_preva,  type='scatter',mode='markers+lines',
+      plot_ly(df%>%ungroup(), x=~Date, y=~tasa_preva,  type='scatter',mode='lines',
               name=input$sGraficoPor, 
               hovertemplate = paste("<b>Tasa:</b>: %{y:.,2%}",
                                     '<br><b>Fecha</b>: %{x}'))%>% 
@@ -680,7 +697,7 @@ server <- function(input, output,  session) {
           legend = list(orientation = "h",   # show entries horizontally
                         xanchor = "center",  # use center of legend as anchor
                         x = 0.5,
-                        font = list(size = 10)))%>%config(displayModeBar = T)
+                        font = list(size = 10)))%>%config(displayModeBar = F)
     }
     
   } )
